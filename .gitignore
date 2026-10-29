@@ -1,0 +1,33 @@
+*.py[cod]
+.web
+.states
+*.db
+# 허깅페이스 Space 데모용 경량 사본(3.2MB, 공개 레시피만)은 예외로 커밋한다.
+# Space 저장소에 반드시 함께 올라가야 앱이 동작하고, 개인정보는 들어있지 않다.
+!hf_space/data/demo.db
+assets/external/
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.web/
+*.db-journal
+*.log
+backup/
+
+# 005 적용 전 백업 파일. 개인정보가 들어 있으므로 저장소에 올리지 않는다.
+backup_before_005_*.sql
+backup_allergy_tags_*.sql
+
+# scripts/backup_db.py가 뜨는 전체 백업. 같은 이유로 올리지 않는다.
+backups/
+
+# 압축 파일은 통째로 막는다. 2026-09-13에 작업 트리에서 `_.zip`을 발견했는데 안에
+# `.env`가 들어 있었다 - `.env` 자체는 위에서 막고 있었지만 압축하면 그 규칙을 빠져나간다.
+# 이 저장소는 공개라 한 번 올라가면 DB 접속 문자열과 서비스 키가 그대로 노출된다.
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.rar

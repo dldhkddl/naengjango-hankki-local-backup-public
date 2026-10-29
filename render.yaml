@@ -1,0 +1,112 @@
+# Render Blueprint - FastAPI 백엔드(api/) 배포 설정
+# Render 대시보드에서 "New +" -> "Blueprint"로 이 저장소를 연결하면 이 파일을 자동으로 읽는다.
+# sync: false인 항목은 Render가 값 입력을 요구한다(비밀값이라 여기 파일에는 안 넣음).
+
+services:
+  - type: web
+    name: naengjango-hankki-v2-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # 파이썬 버전을 고정한다. 빼두면 Render의 그때그때 기본값을 쓰게 되는데, 코드는
+      # CI와 같은 3.12에서만 검증돼 있다. 빌드가 언제 깨질지 모르는 상태로 두지 않는다.
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: POSTGRES_URL
+        sync: false
+      - key: FOODSAFETY_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ADMIN_SECRET
+        sync: false
+      # 브라우저가 이 API를 직접 부르려면 허용 주소를 알려줘야 한다(V3에서 추가).
+      # V2는 Reflex가 서버 쪽에서 불러서 필요 없었다. 정적 사이트 주소가 정해지면
+      # 그 값으로 바꾼다.
+      - key: CORS_ALLOW_ORIGINS
+        value: https://naengjango-hankki-v3-web.onrender.com
+
+      # ---------- 비밀번호 초기화 (2026-08-18에 추가) ----------
+      # 이 세 개가 없으면 초기화가 "조용히" 실패한다. /auth/password-reset/request는
+      # 계정 존재 여부가 새어나가지 않도록 성공·실패에 관계없이 같은 응답을 주기 때문에
+      # (api/routers/auth.py), 사용자는 "메일을 보냈어요"를 보고 기다리는데 아무것도
+      # 오지 않고 어디에도 신호가 없다. 반드시 값을 채울 것.
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GMAIL_SENDER_ADDRESS
+        sync: false
+      # 메일 본문의 초기화 링크가 가리킬 주소. 기본값이 http://localhost:5173이라
+      # 지정하지 않으면 링크가 받는 사람의 컴퓨터를 가리킨다.
+      - key: WEB_BASE_URL
+        value: https://naengjango-hankki-v3-web.onrender.com
+
+      # ---------- 부가 기능 ----------
+      # 지인 테스트의 핵심 흐름(가입-온보딩-재료-추천-상세)에는 필요 없다. 다만 해당
+      # 화면을 누르면 그때 실패하므로, 그 기능을 열어둘 거라면 값을 채워야 한다.
+      # ---------- 자랑하기 사진 (2026-08-20에 추가) ----------
+      # Supabase Storage의 brag-photos 버킷에 올린다. 없으면 사진 없는 글만 올라간다
+      # (기능이 통째로 죽지는 않게 만들었다).
+      #
+      # SUPABASE_SERVICE_KEY는 DB 전체 권한을 가진 비밀키다. 서버에서만 쓰고 프론트로
+      # 절대 내보내지 않는다 - 브라우저는 우리 API에 사진을 보내고, 서버가 이 키로
+      # Supabase에 올린다. VITE_ 접두사를 붙이면 번들에 그대로 박히니 주의할 것.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+      # 제휴 키 암호화(src/agents/crypto_utils.py). 한 번 정하면 절대 바꾸면 안 된다 -
+      # 바꾸면 기존 암호문을 복호화할 수 없다.
+      - key: APP_ENCRYPTION_KEY
+        sync: false
+      # 농산물 가격(src/agents/price_agent.py)
+      - key: KAMIS_CERT_ID
+        sync: false
+      - key: KAMIS_CERT_KEY
+        sync: false
+      # 쇼핑 링크(api/routers/shopping.py)
+      - key: COUPANG_ACCESS_KEY
+        sync: false
+      - key: COUPANG_SECRET_KEY
+        sync: false
+      # 유튜브 영상(src/agents/youtube_agent.py)
+      - key: YOUTUBE_API_KEY
+        sync: false
+      # 식품영양성분 DB 적재(src/agents/ingredient_catalog_agent.py)
+      - key: NUTRITION_API_KEY
+        sync: false
+
+  # V3 프론트엔드. Vite 빌드 결과(정적 파일)를 Render 정적 사이트로 올린다.
+  #
+  # 정적 사이트를 쓰는 이유: Render 무료 웹 서비스는 15분 유휴 후 중단되고 재시작에
+  # 1분쯤 걸리는데, 정적 사이트는 CDN에서 서빙돼 스핀다운이 없다. 프론트를 SSR로 올리면
+  # 백엔드 콜드스타트(실측 34.6초) 동안 사용자가 빈 화면만 보게 된다. 정적 SPA는 셸이
+  # 즉시 뜨고 그 위에 "서버 깨우는 중"을 띄울 수 있다.
+  #
+  # 주의: VITE_API_BASE를 반드시 지정한다. 없으면 프론트가 코드의 기본값(V2 백엔드)을
+  # 보게 되는데, 그쪽에는 V3의 인증 변경이 반영돼 있지 않다.
+  - type: web
+    name: naengjango-hankki-v3-web
+    runtime: static
+    # --include=dev가 필요하다. NODE_ENV=production인 환경에서 npm ci는 devDependencies를
+    # 건너뛰는데, 이 프로젝트는 빌드 도구인 tsc와 vite가 둘 다 devDependencies에 있다.
+    # 그러면 "'tsc'을(를) 찾을 수 없습니다"로 빌드가 죽는다(2026-08-18에 로컬에서 재현했다).
+    # NODE_ENV가 안 걸린 환경에서는 아무 차이가 없으므로 그냥 붙여둔다.
+    buildCommand: cd frontend && npm ci --include=dev && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://naengjango-hankki-v2-api.onrender.com
+    routes:
+      # SPA라 서버에 없는 경로(/recipe/67 등)도 index.html로 보내야 한다.
+      # 이게 없으면 주소를 직접 입력하거나 새로고침할 때 404가 난다.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# V3에서 Reflex 백엔드 서비스(naengjango-hankki-v2-reflex)를 이 블루프린트에서 뺐다.
+# 프론트가 React(Vite)로 바뀌면서 상시 실행되는 Python 프로세스가 더는 필요 없다.
+# FastAPI 서비스 이름은 살아 있는 Render 서비스와 연결돼 있어서 일부러 v2 그대로 두었다.
+# 바꾸면 새 서비스가 생기고 기존 주소가 끊긴다.
